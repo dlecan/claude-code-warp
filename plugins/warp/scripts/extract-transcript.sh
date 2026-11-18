@@ -13,6 +13,8 @@
 # The filter only skips patterns it positively recognizes; anything else is
 # passed through untouched. An odd-looking title beats a missing notification.
 
+source "$(dirname "${BASH_SOURCE[0]}")/transcript-tail.sh"
+
 # Envelope tags for entries Claude Code injects on its own. These are stable
 # ASCII identifiers, matched at the start of the entry's text so that a human
 # prompt merely quoting a tag is left alone.
@@ -42,6 +44,16 @@ extract_last_user_prompt() {
         return 0
     fi
 
+    local prompt
+    prompt=$(transcript_tail "$transcript_path" "$TRANSCRIPT_TAIL_BYTES" | _last_user_prompt_filter)
+    if [ -z "$prompt" ] && transcript_larger_than "$transcript_path" "$TRANSCRIPT_TAIL_BYTES"; then
+        prompt=$(transcript_tail "$transcript_path" "$TRANSCRIPT_TAIL_MAX_BYTES" | _last_user_prompt_filter)
+    fi
+    printf '%s' "$prompt"
+}
+
+# Reads JSONL records on stdin and prints the most recent human prompt.
+_last_user_prompt_filter() {
     jq -rs \
         --arg tags "$WARP_SYNTHETIC_TAGS" \
         --arg tags_anywhere "$WARP_SYNTHETIC_TAGS_ANYWHERE" \
@@ -61,7 +73,7 @@ extract_last_user_prompt() {
             select($text | test("^\\s*(" + $prefixes + ")") | not) |
             $text
         ] | last // empty
-    ' "$transcript_path" 2>/dev/null
+    ' 2>/dev/null
 }
 
 # Prints the text of the most recent assistant message in the transcript, or
@@ -73,8 +85,9 @@ extract_last_assistant_response() {
         return 0
     fi
 
-    jq -rs '
+    # The last assistant record is always at the very end, so the first window is enough.
+    transcript_tail "$transcript_path" "$TRANSCRIPT_TAIL_BYTES" | jq -rs '
         [.[] | select(.type == "assistant" and .message.content)] | last |
         [.message.content[] | select(.type == "text") | .text] | join(" ")
-    ' "$transcript_path" 2>/dev/null
+    ' 2>/dev/null
 }
