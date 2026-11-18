@@ -44,6 +44,8 @@ if [ -n "$TRANSCRIPT_PATH" ] && [ -f "$TRANSCRIPT_PATH" ]; then
         QUERY="${QUERY:0:197}..."
     fi
 fi
+# Strip markdown before truncating, whichever source the response came from.
+RESPONSE=$(strip_markdown "$RESPONSE")
 if [ -n "$RESPONSE" ] && [ ${#RESPONSE} -gt 200 ]; then
     RESPONSE="${RESPONSE:0:197}..."
 fi
