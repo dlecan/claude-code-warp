@@ -60,6 +60,13 @@ _last_user_prompt_filter() {
         --arg prefixes "$WARP_SYNTHETIC_PREFIXES" '
         [
             .[] | select(.type == "user") |
+            # Claude Code marks what it injects: isMeta for skill loads and
+            # attachments, isCompactSummary for the summary that resumes a
+            # session, and an origin other than "human" on recent versions.
+            # Entries without these fields fall through to the pattern checks below.
+            select((.isMeta // false) | not) |
+            select((.isCompactSummary // false) | not) |
+            select((.origin.kind // "human") == "human") |
             # Human prompts are a plain string or an array with text blocks;
             # tool results are arrays of tool_result blocks and drop out here.
             (if .message.content | type == "string" then .message.content
@@ -71,7 +78,15 @@ _last_user_prompt_filter() {
             select($text | test("^\\s*<(" + $tags + ")\\b") | not) |
             select($text | test("<(" + $tags_anywhere + ")\\b") | not) |
             select($text | test("^\\s*(" + $prefixes + ")") | not) |
-            $text
+            # Pasted text arrives wrapped in a pasted_content envelope, and
+            # attached images leave [Image #n] placeholders in the prompt.
+            ($text
+                | gsub("</?pasted_content[^>]*>"; "")
+                | gsub("\\[Image #[0-9]+\\]"; "")
+                | gsub("\\s+"; " ")
+                | sub("^ "; "") | sub(" $"; "")) as $title |
+            select(($title | length) > 0) |
+            $title
         ] | last // empty
     ' 2>/dev/null
 }

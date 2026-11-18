@@ -56,7 +56,7 @@ MARKETPLACE_VERSION=$(jq -r '.plugins[] | select(.name == "warp") | .version' \
     "$REPO_DIR/.claude-plugin/marketplace.json")
 NOTIFICATION_MATCHER=$(jq -r '.hooks.Notification[0].matcher' "$PLUGIN_DIR/hooks/hooks.json")
 
-assert_eq "plugin version bumped" "2.4.1" "$PLUGIN_VERSION"
+assert_eq "plugin version bumped" "2.4.1-dlecan.1" "$PLUGIN_VERSION"
 assert_eq "marketplace version matches plugin" "$PLUGIN_VERSION" "$MARKETPLACE_VERSION"
 assert_eq "notification matcher includes input-required events" \
     "idle_prompt|agent_needs_input" \
@@ -382,6 +382,12 @@ INPUT=$(jq -nc --arg t "$STOP_TMP/unflushed.jsonl" --arg m "$LONG" \
 PAYLOAD=$(run_stop_hook "$INPUT")
 assert_json_field "response from last_assistant_message is truncated to 200 chars" \
     "$PAYLOAD" '.response | length' "200"
+
+INPUT=$(jq -nc --arg t "$STOP_TMP/unflushed.jsonl" \
+    '{session_id:"s1", cwd:"/tmp/proj", transcript_path:$t, last_assistant_message:"**Done.**\n\n- slides `8` and 9"}')
+PAYLOAD=$(run_stop_hook "$INPUT")
+assert_json_field "markdown is stripped from last_assistant_message" \
+    "$PAYLOAD" '.response' "Done. slides 8 and 9"
 echo "=== extract-transcript.sh ==="
 
 source "$SCRIPT_DIR/extract-transcript.sh"
@@ -448,6 +454,35 @@ assert_eq "interrupt marker is skipped" "check the prod deploy" "$(extract_last_
 write_transcript "$HUMAN" \
     '{"type":"user","message":{"role":"user","content":"   \n<bash-stdout>indented</bash-stdout>"}}'
 assert_eq "leading whitespace does not defeat the filter" "check the prod deploy" "$(extract_last_user_prompt "$TRANSCRIPT")"
+
+echo ""
+echo "--- Entries Claude Code marks as injected ---"
+
+# Skill loads and image attachments are isMeta entries with plain text.
+write_transcript "$HUMAN" \
+    '{"type":"user","isMeta":true,"message":{"role":"user","content":[{"type":"text","text":"Base directory for this skill: /home/u/.claude/skills/x"}]}}'
+assert_eq "isMeta skill load is skipped" "check the prod deploy" "$(extract_last_user_prompt "$TRANSCRIPT")"
+
+write_transcript "$HUMAN" \
+    '{"type":"user","isMeta":true,"message":{"role":"user","content":[{"type":"text","text":"[Image: source: /tmp/x/images/2.png]"}]}}'
+assert_eq "isMeta image attachment is skipped" "check the prod deploy" "$(extract_last_user_prompt "$TRANSCRIPT")"
+
+write_transcript "$HUMAN" \
+    '{"type":"user","isCompactSummary":true,"isVisibleInTranscriptOnly":true,"message":{"role":"user","content":"This session is being continued from a previous conversation"}}'
+assert_eq "compaction summary is skipped" "check the prod deploy" "$(extract_last_user_prompt "$TRANSCRIPT")"
+
+# Recent Claude Code tags each prompt with its origin; only human ones are titles.
+write_transcript "$HUMAN" \
+    '{"type":"user","origin":{"kind":"peer"},"message":{"role":"user","content":"Hello from another session"}}'
+assert_eq "non-human origin is skipped" "check the prod deploy" "$(extract_last_user_prompt "$TRANSCRIPT")"
+
+write_transcript \
+    '{"type":"user","origin":{"kind":"human"},"message":{"role":"user","content":"\n\n<pasted_content id=\"80ee\">\nfix the   tabs\n</pasted_content id=\"80ee\">"}}'
+assert_eq "pasted_content envelope is removed and whitespace folded" "fix the tabs" "$(extract_last_user_prompt "$TRANSCRIPT")"
+
+write_transcript \
+    '{"type":"user","origin":{"kind":"human"},"message":{"role":"user","content":"the screenshots\n[Image #2]\n[Image #3]"}}'
+assert_eq "image placeholders are removed" "the screenshots" "$(extract_last_user_prompt "$TRANSCRIPT")"
 
 echo ""
 echo "--- Human prompts are never over-filtered ---"
