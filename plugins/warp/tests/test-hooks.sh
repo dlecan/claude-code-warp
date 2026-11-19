@@ -56,7 +56,7 @@ MARKETPLACE_VERSION=$(jq -r '.plugins[] | select(.name == "warp") | .version' \
     "$REPO_DIR/.claude-plugin/marketplace.json")
 NOTIFICATION_MATCHER=$(jq -r '.hooks.Notification[0].matcher' "$PLUGIN_DIR/hooks/hooks.json")
 
-assert_eq "plugin version bumped" "2.4.1-dlecan.1" "$PLUGIN_VERSION"
+assert_eq "plugin version bumped" "2.4.1-dlecan.2" "$PLUGIN_VERSION"
 assert_eq "marketplace version matches plugin" "$PLUGIN_VERSION" "$MARKETPLACE_VERSION"
 assert_eq "notification matcher includes input-required events" \
     "idle_prompt|agent_needs_input" \
