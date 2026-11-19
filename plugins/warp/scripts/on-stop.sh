@@ -46,8 +46,10 @@ if [ -n "$TRANSCRIPT_PATH" ] && [ -f "$TRANSCRIPT_PATH" ]; then
 fi
 # Strip markdown before truncating, whichever source the response came from.
 RESPONSE=$(strip_markdown "$RESPONSE")
-if [ -n "$RESPONSE" ] && [ ${#RESPONSE} -gt 200 ]; then
-    RESPONSE="${RESPONSE:0:197}..."
+# Warp's notification body shows only the last ~100 characters of the response,
+# so anything longer loses its beginning.
+if [ -n "$RESPONSE" ] && [ ${#RESPONSE} -gt 100 ]; then
+    RESPONSE="${RESPONSE:0:97}..."
 fi
 
 # Claude Code wakes the agent again when a background task finishes or a session cron fires,

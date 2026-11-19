@@ -29,13 +29,17 @@ negotiate_protocol_version() {
 
 # Notification bodies are shown as plain text, so markdown syntax from the
 # agent's reply appears literally. Removes the common markers and folds
-# newlines into spaces. Underscores are left alone so identifiers like
+# newlines into spaces. Table rows become cells joined by " · " and their
+# separator rows are dropped. Underscores are left alone so identifiers like
 # __init__ survive.
 strip_markdown() {
     jq -rn --arg s "$1" '$s
         | gsub("(?m)^\\s*(#+|[-*+]|\\d+\\.)\\s+"; "")
         | gsub("\\*\\*|`"; "")
         | gsub("\\[(?<t>[^\\]]+)\\]\\([^)]*\\)"; "\(.t)")
+        | gsub("(?m)^[ \\t]*\\|?([ \\t]*:?-{3,}:?[ \\t]*\\|)+[ \\t]*(:?-{3,}:?)?[ \\t]*$"; "")
+        | gsub("(?m)^[ \\t]*\\|[ \\t]*|[ \\t]*\\|[ \\t]*$"; "")
+        | gsub("[ \\t]*\\|[ \\t]*"; " · ")
         | gsub("\\s*\\n+\\s*"; " ")'
 }
 

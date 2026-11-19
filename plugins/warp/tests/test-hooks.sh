@@ -321,6 +321,8 @@ assert_eq "link keeps its text" "see the docs" "$(strip_markdown 'see [the docs]
 assert_eq "underscores kept" "call __init__ and snake_case" "$(strip_markdown 'call __init__ and snake_case')"
 assert_eq "plain text unchanged" 'It means greeting. Use: printf("hello")' "$(strip_markdown 'It means greeting. Use: printf("hello")')"
 assert_eq "empty input" "" "$(strip_markdown '')"
+assert_eq "table becomes a line of cells" "Labels: # · case 1 · outage" \
+    "$(strip_markdown $'Labels:\n\n| # | case |\n|---|:---:|\n| 1 | outage |')"
 
 echo ""
 echo "--- Modern-only hooks exit silently without protocol version ---"
@@ -380,8 +382,10 @@ LONG=$(printf 'x%.0s' $(seq 1 250))
 INPUT=$(jq -nc --arg t "$STOP_TMP/unflushed.jsonl" --arg m "$LONG" \
     '{session_id:"s1", cwd:"/tmp/proj", transcript_path:$t, last_assistant_message:$m}')
 PAYLOAD=$(run_stop_hook "$INPUT")
-assert_json_field "response from last_assistant_message is truncated to 200 chars" \
-    "$PAYLOAD" '.response | length' "200"
+# Warp's notification body keeps only the last ~100 characters of the response,
+# so a longer one loses its beginning. Send at most 100.
+assert_json_field "response is truncated to the 100 chars Warp displays" \
+    "$PAYLOAD" '.response | length' "100"
 
 INPUT=$(jq -nc --arg t "$STOP_TMP/unflushed.jsonl" \
     '{session_id:"s1", cwd:"/tmp/proj", transcript_path:$t, last_assistant_message:"**Done.**\n\n- slides `8` and 9"}')
